@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>과학츄핑 분류하기</title>
+    <style>
+        :root { --bg: #fffbfd; --accent: #ff85a1; --header-bg: linear-gradient(135deg, #ffeef2 0%, #fff5f8 100%); }
+        body { margin: 0; font-family: 'Malgun Gothic', sans-serif; background: var(--bg); overflow: hidden; }
+        
+        header { 
+            background: var(--header-bg); padding: 25px; border-bottom: 3px solid var(--accent); text-align: center; 
+            z-index: 100; position: relative;
+        }
+        header h1 { margin: 0 0 10px 0; color: var(--accent); font-size: 2.2rem; display: inline-block; }
+        header p { 
+            margin: 0; font-size: 1rem; color: #555; background: rgba(255, 255, 255, 0.8); 
+            display: inline-block; padding: 10px 25px; border-radius: 30px; border: 2px dashed var(--accent); 
+        }
+
+        #main-container { display: flex; height: calc(100vh - 165px); }
+        
+        #inventory { 
+            width: 250px; background: white; border-right: 3px solid #ffeef2; padding: 15px; 
+            overflow-y: auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; z-index: 10;
+        }
+        .sticker { width: 65px; height: 65px; border: 2px solid #fff0f5; border-radius: 15px; cursor: grab; background: white; display: flex; align-items: center; justify-content: center; z-index: 50; }
+        .sticker img { max-width: 85%; pointer-events: none; }
+
+        #canvas { flex: 1; position: relative; overflow: auto; background: #fff; background-image: radial-gradient(#ffeef2 1.5px, transparent 1.5px); background-size: 40px 40px; }
+        #svg-layer { position: absolute; top: 0; left: 0; width: 10000px; height: 10000px; pointer-events: none; }
+
+        .draggable { position: absolute; z-index: 20; }
+
+        .question-node { 
+            background: white; border: 3px solid var(--accent); border-radius: 20px; 
+            width: 230px; padding: 15px; text-align: center; box-shadow: 0 5px 15px rgba(255,133,161,0.2);
+        }
+        .question-node input { width: 95%; border: none; border-bottom: 2px solid var(--accent); text-align: center; font-weight: bold; color: #ff4d7d; outline: none; background: transparent; }
+
+        .branch-end { width: 140px; text-align: center; background: rgba(255,255,255,0.7); border: 2px dashed #ddd; border-radius: 12px; padding: 10px; }
+        .branch-label { 
+            position: absolute; top: -25px; left: 50%; transform: translateX(-50%);
+            background: var(--accent); color: white; padding: 3px 15px; border-radius: 10px;
+            font-size: 0.85rem; font-weight: bold; white-space: nowrap;
+        }
+        .btn-group { display: flex; flex-direction: column; gap: 5px; }
+        .btn-group button { font-size: 0.75rem; padding: 5px; cursor: pointer; border-radius: 6px; border: none; font-weight: bold; }
+        .btn-q { background: #e3f2fd; color: #1976d2; }
+        .btn-b { background: #f1f8e9; color: #388e3c; }
+
+        .basket-node { background: #fff9fb; border: 2px solid var(--accent); border-radius: 18px; width: 170px; min-height: 110px; padding: 10px; text-align: center; }
+        .drop-zone { min-height: 70px; display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; border: 1px dashed #ffd1dc; border-radius: 10px; }
+
+        /* 팝업 스타일 */
+        .modal { display: flex; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 2000; justify-content: center; align-items: center; }
+        .modal-content { background: white; padding: 30px; border-radius: 35px; width: 450px; border: 6px solid var(--accent); text-align: center; }
+        .modal-content h2 { color: var(--accent); margin-top: 0; }
+        .guide-box { text-align: left; background: #fff5f8; padding: 15px; border-radius: 20px; margin-bottom: 20px; font-size: 0.95rem; line-height: 1.6; }
+
+        .bottom-btns { position: fixed; bottom: 25px; right: 25px; display: flex; gap: 12px; z-index: 1000; }
+        .hint-btn { background: #ffdf65; color: #8a6d00; border: none; padding: 15px 25px; border-radius: 40px; cursor: pointer; font-weight: bold; box-shadow: 0 4px 10px rgba(255, 223, 101, 0.4); }
+        .save-btn { background: var(--accent); color: white; border: none; padding: 15px 30px; border-radius: 40px; cursor: pointer; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div id="guide-modal" class="modal">
+    <div class="modal-content">
+        <h2>🎮 홈페이지 사용 방법</h2>
+        <div class="guide-box">
+            1. 중앙의 질문 상자에 첫 분류 기준을 적어츄!<br>
+            2. <b>예/아니오</b> 길 끝에 있는 버튼을 선택해츄!<br>
+            &nbsp;&nbsp;🔍 <b>또 분류하기</b>: 기준을 더 쪼갤 때<br>
+            &nbsp;&nbsp;🎁 <b>바구니 만들기</b>: 분류가 끝나서 담을 때<br>
+            3. 마지막 바구니에 캐릭터를 쏙 드래그해서 넣어츄!
+        </div>
+        <button class="save-btn" onclick="document.getElementById('guide-modal').style.display='none'">이해했어츄! 시작할래용 🚀</button>
+    </div>
+</div>
+
+<div id="criteria-modal" class="modal" style="display: none;">
+    <div class="modal-content" style="border-color: #ffdf65;">
+        <h2 style="color: #d4a017;">🔬 객관적 기준 힌트</h2>
+        <div class="guide-box" style="background: #fffef0;">
+            <b>똑부러진 분류 기준 세우기!</b><br><br>
+            ❌ 주관적 기준: "귀여운가?", "예쁜가?"<br>
+            <span style="color: #888; font-size: 0.8rem;">(사람마다 생각이 달라서 분류 결과가 바뀌어츄!)</span><br><br>
+            ✅ <b>객관적 기준</b>: "날개가 있는가?", "뿔이 있는가?"<br>
+            <span style="color: #888; font-size: 0.8rem;">(누가 봐도 결과가 똑같이 나와야 좋은 기준이에츄!)</span>
+        </div>
+        <button class="hint-btn" onclick="document.getElementById('criteria-modal').style.display='none'">확인 완료츄! ✨</button>
+    </div>
+</div>
+
+<header>
+    <h1>과학츄핑 분류하기</h1>
+    <br>
+    <p>
+        분류는 <b>공통점과 차이점</b>을 기준으로 생물들을 예쁘게 나누는 거래용! 💖<br>
+        누가 분류해도 같은 결과가 나올 수 있도록, <b>똑부러진 객관적인 기준</b>을 세워 분류해츄! ✨
+    </p>
+</header>
+
+<div id="main-container">
+    <div id="inventory" ondragover="event.preventDefault()" ondrop="dropToInventory(event)"></div>
+    <div id="canvas" ondragover="event.preventDefault()" ondrop="dropToCanvas(event)">
+        <svg id="svg-layer">
+            <defs>
+                <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                    <polygon points="0 0, 10 3.5, 0 7" fill="#ff85a1" />
+                </marker>
+            </defs>
+        </svg>
+    </div>
+</div>
+
+<div class="bottom-btns">
+    <button class="hint-btn" onclick="document.getElementById('criteria-modal').style.display='flex'">💡 객관적 기준 힌트</button>
+    <button class="save-btn" onclick="window.print()">💖 결과 저장 및 출력</button>
+</div>
+
+<script>
+    const inventory = document.getElementById('inventory');
+    const canvas = document.getElementById('canvas');
+    const svg = document.getElementById('svg-layer');
+    let elements = [];
+
+    for (let i = 1; i <= 24; i++) {
+        const div = document.createElement('div');
+        div.className = 'sticker'; div.draggable = true; div.id = `chu-${i}`;
+        div.innerHTML = `<img src="${i}.png" onerror="this.src='https://via.placeholder.com/40/ffffff/ff85a1?text=${i}'">`;
+        div.ondragstart = e => { e.dataTransfer.setData("text/plain", e.target.id); };
+        inventory.appendChild(div);
+    }
+
+    function createQuestion(x, y, parentId = null, branchType = null) {
+        const id = 'q-' + Date.now();
+        const el = document.createElement('div');
+        el.className = 'draggable question-node';
+        el.id = id; el.style.left = x + 'px'; el.style.top = y + 'px';
+        let labelHtml = branchType ? `<div class="branch-label">${branchType}</div>` : '';
+        el.innerHTML = `${labelHtml}<input type="text" placeholder="분류기준을 입력해츄!">`;
+        makeDraggable(el);
+        canvas.appendChild(el);
+        elements.push({ id, parentId });
+        createBranchEnd(x - 110, y + 160, id, "예 (YES)");
+        createBranchEnd(x + 200, y + 160, id, "아니오 (NO)");
+        drawLines();
+    }
+
+    function createBranchEnd(x, y, parentId, branchType) {
+        const id = 'end-' + Math.random().toString(36).substr(2, 9);
+        const el = document.createElement('div');
+        el.className = 'draggable branch-end';
+        el.id = id; el.style.left = x + 'px'; el.style.top = y + 'px';
+        el.innerHTML = `
+            <div class="branch-label">${branchType}</div>
+            <div class="btn-group">
+                <button class="btn-q" onclick="replaceWithNext('${id}', 'question', '${branchType}')">🔍 또 분류하기</button>
+                <button class="btn-b" onclick="replaceWithNext('${id}', 'basket', '${branchType}')">🎁 바구니 만들기</button>
+            </div>
+        `;
+        makeDraggable(el);
+        canvas.appendChild(el);
+        elements.push({ id, parentId });
+        drawLines();
+    }
+
+    function replaceWithNext(oldId, newType, branchType) {
+        const nodeData = elements.find(e => e.id === oldId);
+        const parentId = nodeData.parentId;
+        const el = document.getElementById(oldId);
+        const x = parseInt(el.style.left); const y = parseInt(el.style.top);
+        el.remove();
+        elements = elements.filter(e => e.id !== oldId);
+        if (newType === 'question') createQuestion(x - 45, y, parentId, branchType);
+        else createBasket(x - 15, y, parentId, branchType);
+    }
+
+    function createBasket(x, y, parentId, branchType) {
+        const id = 'b-' + Date.now();
+        const el = document.createElement('div');
+        el.className = 'draggable basket-node';
+        el.id = id; el.style.left = x + 'px'; el.style.top = y + 'px';
+        el.innerHTML = `
+            <div class="branch-label">${branchType}</div>
+            <div style="font-size:0.8rem; color:#ff85a1; margin-bottom:8px; font-weight:bold;">분류 완료!</div>
+            <div class="drop-zone" ondragover="event.preventDefault()" ondrop="dropToNode(event)"></div>
+        `;
+        makeDraggable(el);
+        canvas.appendChild(el);
+        elements.push({ id, parentId });
+        drawLines();
+    }
+
+    function makeDraggable(el) {
+        el.onmousedown = function(e) {
+            if(e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON' || e.target.closest('.sticker')) return;
+            let shiftX = e.clientX - el.getBoundingClientRect().left;
+            let shiftY = e.clientY - el.getBoundingClientRect().top;
+            function moveAt(pageX, pageY) {
+                el.style.left = (pageX - canvas.offsetLeft - shiftX) + 'px';
+                el.style.top = (pageY - canvas.offsetTop - shiftY) + 'px';
+                drawLines();
+            }
+            document.onmousemove = e => moveAt(e.pageX, e.pageY);
+            document.onmouseup = () => { document.onmousemove = null; };
+        };
+    }
+
+    function drawLines() {
+        svg.innerHTML = svg.querySelector('defs').outerHTML;
+        elements.forEach(item => {
+            if (item.parentId) {
+                const startEl = document.getElementById(item.parentId);
+                const endEl = document.getElementById(item.id);
+                if(!startEl || !endEl) return;
+                const startX = startEl.offsetLeft + (startEl.offsetWidth / 2);
+                const startY = startEl.offsetTop + startEl.offsetHeight;
+                const endX = endEl.offsetLeft + (endEl.offsetWidth / 2);
+                const endY = endEl.offsetTop;
+                const line = document.createElementNS("http://www.w3.org/2000/svg", "path");
+                const d = `M ${startX} ${startY} C ${startX} ${startY + 60}, ${endX} ${endY - 60}, ${endX} ${endY}`;
+                line.setAttribute("d", d); line.setAttribute("stroke", "#ff85a1");
+                line.setAttribute("stroke-width", "3"); line.setAttribute("fill", "none");
+                line.setAttribute("marker-end", "url(#arrowhead)");
+                svg.appendChild(line);
+            }
+        });
+    }
+
+    function dropToNode(e) {
+        e.stopPropagation(); e.preventDefault();
+        const charId = e.dataTransfer.getData("text/plain");
+        const charEl = document.getElementById(charId);
+        const targetDropZone = e.target.closest('.drop-zone');
+        if (targetDropZone && charEl) { charEl.style.position = "static"; targetDropZone.appendChild(charEl); }
+    }
+
+    function dropToCanvas(e) {
+        e.preventDefault();
+        const charId = e.dataTransfer.getData("text/plain");
+        const charEl = document.getElementById(charId);
+        if (charEl) {
+            canvas.appendChild(charEl); charEl.style.position = "absolute";
+            charEl.style.left = (e.clientX - canvas.offsetLeft - 32) + 'px';
+            charEl.style.top = (e.clientY - canvas.offsetTop - 32) + 'px';
+        }
+    }
+
+    function dropToInventory(e) {
+        e.preventDefault();
+        const charId = e.dataTransfer.getData("text/plain");
+        const charEl = document.getElementById(charId);
+        if (charEl) { charEl.style.position = "static"; inventory.appendChild(charEl); }
+    }
+
+    createQuestion(window.innerWidth / 2 - 270, 40);
+</script>
+</body>
+</html>
